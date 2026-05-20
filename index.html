@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Smart Soil App</title>
+
+<meta name="viewport"
+content="width=device-width, initial-scale=1">
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+
+body{
+font-family:Arial;
+text-align:center;
+background:#f0f2f5;
+}
+
+h1{
+color:#2c3e50;
+}
+
+.nav{
+display:flex;
+justify-content:center;
+gap:10px;
+margin:10px;
+}
+
+button{
+padding:10px 15px;
+border:none;
+background:#3498db;
+color:white;
+border-radius:8px;
+cursor:pointer;
+margin:5px;
+}
+
+.page{
+display:none;
+}
+
+.active{
+display:block;
+}
+
+.grid{
+display:grid;
+grid-template-columns:
+repeat(auto-fit,minmax(150px,1fr));
+
+gap:10px;
+padding:10px;
+}
+
+.card{
+background:white;
+padding:10px;
+border-radius:10px;
+box-shadow:0 2px 5px rgba(0,0,0,0.2);
+}
+
+canvas{
+background:white;
+padding:10px;
+margin:15px;
+border-radius:10px;
+}
+
+</style>
+</head>
+
+<body>
+
+<h1>🌱 Smart Soil Monitoring</h1>
+
+<div class="nav">
+
+<button onclick="showPage('dashboard')">
+Dashboard
+</button>
+
+<button onclick="showPage('ml')">
+ML Prediction
+</button>
+
+</div>
+
+<!-- DASHBOARD -->
+
+<div id="dashboard"
+class="page active">
+
+<div class="grid">
+
+<div class="card">
+N:
+<span id="n">--</span>
+</div>
+
+<div class="card">
+P:
+<span id="p">--</span>
+</div>
+
+<div class="card">
+K:
+<span id="k">--</span>
+</div>
+
+<div class="card">
+Soil:
+<span id="sm">--</span>
+</div>
+
+<div class="card">
+Temp:
+<span id="temp">--</span>
+</div>
+
+<div class="card">
+Humidity:
+<span id="hum">--</span>
+</div>
+
+<div class="card">
+Pump:
+<span id="pump">--</span>
+</div>
+
+<div class="card">
+Mode:
+<span id="mode">--</span>
+</div>
+
+<div class="card">
+LDR:
+<span id="ldr">--</span>
+</div>
+
+<div class="card">
+PIR:
+<span id="pir">--</span>
+</div>
+
+</div>
+
+<h2>🧪 NPK Graph</h2>
+
+<canvas id="npkChart"></canvas>
+
+<h2>🌱 Environment Graph</h2>
+
+<canvas id="envChart"></canvas>
+
+<h2>⚙️ Control Panel</h2>
+
+<button onclick="setMode(1)">
+🎮 MANUAL MODE
+</button>
+
+<button onclick="setMode(0)">
+🌱 AUTO MODE
+</button>
+
+<br>
+
+<button onclick="controlPump(1)">
+💧 Pump ON
+</button>
+
+<button onclick="controlPump(0)">
+❌ Pump OFF
+</button>
+
+<h2>📍 Farm Location</h2>
+
+<iframe
+id="map"
+width="100%"
+height="300"
+style="border:0"
+loading="lazy"
+allowfullscreen
+src="https://maps.google.com/maps?q=26.1445,91.7362&z=15&output=embed">
+</iframe>
+
+</div>
+
+<!-- ML PAGE -->
+
+<div id="ml"
+class="page">
+
+<h2>🌾 Fertilizer Recommendation</h2>
+
+<h3 id="fert">--</h3>
+
+<h2>🌱 AI Crop Recommendation</h2>
+
+<h3 id="crop">--</h3>
+
+</div>
+
+<script>
+
+const CHANNEL_ID="3217560";
+
+const LDR_CHANNEL_ID=
+"3V02CLTSX2CVUCKR";
+
+const WRITE_API_KEY=
+"4XPH58SYJHHUF94Y";
+
+let labels=[];
+
+let nData=[];
+let pData=[];
+let kData=[];
+
+let smData=[];
+let tData=[];
+let hData=[];
+
+let lastMotion=0;
+let lastDry=0;
+
+// PAGE
+
+function showPage(page){
+
+document
+.querySelectorAll(".page")
+.forEach(
+p=>p.classList.remove("active")
+);
+
+document
+.getElementById(page)
+.classList.add("active");
+
+}
+
+// NPK CHART
+
+const npkChart=
+new Chart(
+document.getElementById(
+"npkChart"
+),
+
+{
+type:"line",
+
+data:{
+
+labels:labels,
+
+datasets:[
+
+{
+label:"Nitrogen",
+data:nData,
+borderColor:"green"
+},
+
+{
+label:"Phosphorus",
+data:pData,
+borderColor:"blue"
+},
+
+{
+label:"Potassium",
+data:kData,
+borderColor:"orange"
+}
+
+]
+
+}
+
+});
+
+// ENV CHART
+
+const envChart=
+new Chart(
+document.getElementById(
+"envChart"
+),
+
+{
+type:"line",
+
+data:{
+
+labels:labels,
+
+datasets:[
+
+{
+label:"Soil",
+data:smData,
+borderColor:"brown"
+},
+
+{
+label:"Temp",
+data:tData,
+borderColor:"red"
+},
+
+{
+label:"Humidity",
+data:hData,
+borderColor:"purple"
+}
+
+]
+
+}
+
+});
+
+// CONTROL
+
+function setMode(mode){
+
+fetch(
+`https://api.thingspeak.com/update?api_key=${WRITE_API_KEY}&field7=${mode}`
+)
+
+.then(()=>alert(
+mode?
+"Manual":
+"Auto"
+));
+
+}
+
+function controlPump(state){
+
+fetch(
+`https://api.thingspeak.com/update?api_key=${WRITE_API_KEY}&field8=${state}`
+)
+
+.then(
+()=>alert(
+"Pump Command Sent"
+)
+);
+
+}
+
+// FETCH
+
+function getData(){
+
+fetch(
+`https://api.thingspeak.com/channels/${CHANNEL_ID}/feeds.json?results=10`
+)
+
+.then(res=>res.json())
+
+.then(data=>{
+
+let feeds=data.feeds;
+
+labels.length=0;
+
+nData.length=0;
+pData.length=0;
+kData.length=0;
+
+smData.length=0;
+tData.length=0;
+hData.length=0;
+
+feeds.forEach(f=>{
+
+labels.push(
+f.created_at.substring(11,19)
+);
+
+nData.push(
+parseInt(f.field1)
+);
+
+pData.push(
+parseInt(f.field2)
+);
+
+kData.push(
+parseInt(f.field3)
+);
+
+smData.push(
+parseInt(f.field4)
+);
+
+tData.push(
+parseFloat(f.field5)
+);
+
+hData.push(
+parseFloat(f.field6)
+);
+
+});
+
+npkChart.update();
+envChart.update();
+
+let last=
+feeds[
+feeds.length-1
+];
+
+let N=parseInt(
+last.field1
+);
+
+let P=parseInt(
+last.field2
+);
+
+let K=parseInt(
+last.field3
+);
+
+let soil=parseInt(
+last.field4
+);
+
+document
+.getElementById("n")
+.innerText=N;
+
+document
+.getElementById("p")
+.innerText=P;
+
+document
+.getElementById("k")
+.innerText=K;
+
+document
+.getElementById("sm")
+.innerText=
+soil+"%";
+
+document
+.getElementById("temp")
+.innerText=
+last.field5+"°C";
+
+document
+.getElementById("hum")
+.innerText=
+last.field6+"%";
+
+document
+.getElementById("pump")
+.innerText=
+last.field8==1?
+"💧 ON":
+"❌ OFF";
+
+document
+.getElementById("mode")
+.innerText=
+last.field7==1?
+"MANUAL":
+"AUTO";
+
+if(
+soil<30 &&
+lastDry==0
+){
+
+alert(
+"⚠ Soil Dry"
+);
+
+lastDry=1;
+
+}
+
+if(
+soil>=30
+)
+lastDry=0;
+
+// fertilizer
+
+let fert="";
+
+if(
+N<=P &&
+N<=K
+)
+fert="Add Urea";
+
+else if(
+P<=N &&
+P<=K
+)
+fert="Add DAP/SSP";
+
+else
+fert="Add MOP/SOP";
+
+document
+.getElementById("fert")
+.innerText=fert;
+
+// crop
+
+let crop="";
+
+if(
+soil>70 &&
+N>40 &&
+P>30 &&
+K>30
+)
+crop="Rice 🌾";
+
+else if(
+soil<30
+)
+crop=
+"Millets 🌱";
+
+else if(
+soil>60
+)
+crop="Tea 🍃";
+
+else
+crop=
+"Mustard 🌼";
+
+document
+.getElementById("crop")
+.innerText=crop;
+
+});
+
+// LDR PIR
+
+fetch(
+`https://api.thingspeak.com/channels/${LDR_CHANNEL_ID}/feeds/last.json`
+)
+
+.then(
+res=>res.json()
+)
+
+.then(data2=>{
+
+let ldr=
+parseInt(
+data2.field1
+);
+
+let pir=
+parseInt(
+data2.field2
+);
+
+document
+.getElementById("ldr")
+.innerText=ldr;
+
+document
+.getElementById("pir")
+.innerText=
+pir==1?
+"🚨 Motion":
+"✅ Safe";
+
+if(
+pir==1 &&
+lastMotion==0
+){
+
+alert(
+"🚨 Motion Detected"
+);
+
+lastMotion=1;
+
+}
+
+if(
+pir==0
+)
+lastMotion=0;
+
+});
+
+}
+
+setInterval(
+getData,
+15000
+);
+
+getData();
+
+// GPS
+
+navigator
+.geolocation
+.getCurrentPosition(
+pos=>{
+
+let lat=
+pos.coords.latitude;
+
+let lon=
+pos.coords.longitude;
+
+document
+.getElementById("map")
+.src=
+
+`https://maps.google.com/maps?q=${lat},${lon}&z=15&output=embed`;
+
+}
+
+);
+
+</script>
+
+</body>
+</html>
